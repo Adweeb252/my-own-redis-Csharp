@@ -9,6 +9,8 @@ Console.WriteLine("Logs from your program will appear here!");
 TcpListener server = new TcpListener(IPAddress.Any, 6380);
 server.Start();
 bool isServerRunning = true;
+//Mapping for set and get commands
+Dictionary<string, string> dict = new Dictionary<string, string>();
 
 while (isServerRunning)
 {
@@ -30,10 +32,32 @@ void handleClient(Socket client)
         string message = Encoding.UTF8.GetString(buffer, 0, bytesRead).Trim();
         var command = message.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
         string cmdsize = command[0].Substring(1);
-        int argsize = int.Parse(cmdsize);
+
+        int argsize = int.Parse(cmdsize); //arguement size which is the first line
+
         string cmd = command[2].ToUpper();
         string response = "none";
-        if (cmd == "PING")
+
+        if (cmd == "SET" && argsize == 3)
+        {
+            string key = command[4];
+            string val = command[6];
+            dict[key] = val;
+            response = "+OK\r\n";
+        }
+        else if (cmd == "GET" && argsize == 2)
+        {
+            string key = command[4];
+            if (dict.ContainsKey(key))
+            {
+                response = $"+{dict[key]}\r\n";
+            }
+            else
+            {
+                response = "+Wrong_key\r\n";
+            }
+        }
+        else if (cmd == "PING")
         {
             response = "+PONG\r\n";
         }
