@@ -1,6 +1,7 @@
 ﻿using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Runtime.Caching;
 
 // You can use print statements as follows for debugging, they'll be visible when running tests.
 Console.WriteLine("Logs from your program will appear here!");
@@ -10,7 +11,9 @@ TcpListener server = new TcpListener(IPAddress.Any, 6380);
 server.Start();
 bool isServerRunning = true;
 //Mapping for set and get commands
-Dictionary<string, string> dict = new Dictionary<string, string>();
+// Dictionary<string, string> dict = new Dictionary<string, string>();
+var db = MemoryCache.Default;
+
 
 while (isServerRunning)
 {
@@ -38,23 +41,32 @@ void handleClient(Socket client)
         string cmd = command[2].ToUpper();
         string response = "none";
 
-        if (cmd == "SET" && argsize == 3)
+        if (cmd == "SET" && argsize >= 3)
         {
             string key = command[4];
             string val = command[6];
-            dict[key] = val;
+            if (argsize == 5)
+            {
+                int expt = int.Parse(command[10]);
+                db.Set(key, (object)val, DateTimeOffset.Now.AddMilliseconds(expt));
+            }
+            else
+            {
+                db.Set(key, (object)val, DateTimeOffset.MaxValue);
+            }
+            // dict[key] = val;
             response = "+OK\r\n";
         }
         else if (cmd == "GET" && argsize == 2)
         {
             string key = command[4];
-            if (dict.ContainsKey(key))
+            if (db[key] != null)
             {
-                response = $"+{dict[key]}\r\n";
+                response = $"+{db[key]}\r\n";
             }
             else
             {
-                response = "+Wrong_key\r\n";
+                response = "$-1\r\n";
             }
         }
         else if (cmd == "PING")
