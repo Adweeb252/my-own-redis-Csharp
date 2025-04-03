@@ -14,6 +14,22 @@ bool isServerRunning = true;
 // Dictionary<string, string> dict = new Dictionary<string, string>();
 var db = MemoryCache.Default;
 
+string dir = string.Empty;
+string dbFilename = string.Empty;
+//Getting arguments from the command line
+args = Environment.GetCommandLineArgs();
+for (int i = 0; i < args.Length; i++)
+{
+    if (args[i].Equals("--dir") && i + 1 < args.Length)
+    {
+        dir = args[i + 1];
+    }
+    else if (args[i].Equals("--dbfilename") && i + 1 < args.Length)
+    {
+        dbFilename = args[i + 1];
+    }
+}
+
 
 while (isServerRunning)
 {
@@ -81,6 +97,17 @@ void handleClient(Socket client)
                 echo += command[i] + " ";
             }
             response = $"+{echo}\r\n";
+        }
+        else if (cmd == "CONFIG" && command[4].ToUpper() == "GET" && argsize == 3)
+        {
+            if (command[6].Equals("dir"))
+            {
+                response = $"*2\r\n$3\r\ndir\r\n${dir.Length}\r\n{dir}\r\n";
+            }
+            else if (command[6].Equals("dbfilename"))
+            {
+                response = $"*2\r\n$3\r\ndir\r\n${dbFilename.Length}\r\n{dbFilename}\r\n";
+            }
         }
         else
         {
