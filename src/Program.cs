@@ -180,6 +180,8 @@ void ParseRedisData(byte[] data)
             {
                 index = ParseDatabaseSection(data, index);
             }
+            else if (data[index] == 0xFF)
+                break;
             else
                 index++;
         }
@@ -192,22 +194,35 @@ void ParseRedisData(byte[] data)
 int ParseDatabaseSection(byte[] data, int index)
 {
     index = index + 1;
-    int length = data[index] + data[index + 1];
+    int length = data[index];
     Console.WriteLine($"Length of key-value pair: {length}");
     index = index + 2;
-    if (data[index] != 0x00)
-    {
-        throw new Exception("Data format other than string is not supported yet");
-    }
-    index++;
 
     for (int i = 0; i < length; i++)
     {
+        int expTime = 0;
         if (data[index] == 0xFC)
         {
-            Console.WriteLine("Skipping expiry information.");
-            index += 10; // Skip FC + 8-byte unsigned long + 0x00
+            index++;
+            // Parse the 8-byte unsigned long in little-endian format
+            long unixTimestamp = (long)BitConverter.ToUInt64(data.Skip(index).Take(8).ToArray(), 0);
+            index += 8; // Move past the 8 bytes
+            // Validate the Unix timestamp
+            if (unixTimestamp < -62135596800 || unixTimestamp > 253402300799)
+            {
+                Console.WriteLine($"Invalid Unix timestamp: {unixTimestamp}. Skipping key.");
+                continue; // Skip this key-value pair
+            }
+            // Convert Unix timestamp to relative milliseconds
+            DateTimeOffset expirationDate = DateTimeOffset.FromUnixTimeSeconds(unixTimestamp);
+            expTime = (int)(expirationDate - DateTimeOffset.Now).TotalMilliseconds;
+            Console.WriteLine($"Expiration time (Unix timestamp): {expTime}");
         }
+        if (data[index] != 0x00)
+        {
+            throw new Exception("Data format other than string is not supported yet");
+        }
+        index++;
         int keyLength = data[index];
         Console.WriteLine($"Key length: {keyLength}");
         index++;
@@ -218,10 +233,13 @@ int ParseDatabaseSection(byte[] data, int index)
         index++;
         string value = ParseString(data, ref index, valueLength);
         Console.WriteLine($"Value: {value}");
-        index++;
         Console.WriteLine($"Setting key: {key} with value: {value}");
-
-        db.Set(key, value, DateTimeOffset.MaxValue);
+        if (expTime > 0)
+        {
+            db.Set(key, value, DateTimeOffset.Now.AddMilliseconds(expTime));
+        }
+        else
+            db.Set(key, value, DateTimeOffset.MaxValue);
     }
     return index;
 }
