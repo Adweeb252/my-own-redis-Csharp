@@ -6,9 +6,6 @@ using System.Runtime.Caching;
 // You can use print statements as follows for debugging, they'll be visible when running tests.
 Console.WriteLine("Logs from your program will appear here!");
 
-// Uncomment this block to pass the first stage
-TcpListener server = new TcpListener(IPAddress.Any, 6380);
-server.Start();
 bool isServerRunning = true;
 //Mapping for set and get commands
 // Dictionary<string, string> dict = new Dictionary<string, string>();
@@ -16,6 +13,7 @@ var db = MemoryCache.Default;
 DateTime EPOCH = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
 string dir = string.Empty;
 string dbFilename = string.Empty;
+int port = 0;
 args = Environment.GetCommandLineArgs();
 handleArguements(args);
 loadRDBfile();
@@ -40,7 +38,9 @@ void loadRDBfile()
         Console.WriteLine($"Error reading file: {ex.Message}");
     }
 }
-
+// Create a TCP/IP server.
+TcpListener server = new TcpListener(IPAddress.Any, port == 0 ? 6380 : port);
+server.Start();
 while (isServerRunning)
 {
     var acceptTask = server.AcceptSocketAsync(); // wait for client
@@ -169,6 +169,10 @@ void handleArguements(string[] args)
         else if (args[i].Equals("--dbfilename") && i + 1 < args.Length)
         {
             dbFilename = args[i + 1];
+        }
+        else if (args[i].Equals("--port") && i + 1 < args.Length)
+        {
+            port = int.Parse(args[i + 1]);
         }
     }
 }
