@@ -13,7 +13,7 @@ bool isServerRunning = true;
 //Mapping for set and get commands
 // Dictionary<string, string> dict = new Dictionary<string, string>();
 var db = MemoryCache.Default;
-
+DateTime EPOCH = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
 string dir = string.Empty;
 string dbFilename = string.Empty;
 args = Environment.GetCommandLineArgs();
@@ -77,7 +77,10 @@ void handleCommands(string[] command, Socket client)
         if (argsize == 5)
         {
             int expt = int.Parse(command[10]);
-            db.Set(key, (object)val, DateTimeOffset.Now.AddMilliseconds(expt));
+            if (command[8].ToUpper() == "PX")
+                db.Set(key, (object)val, DateTimeOffset.Now.AddMilliseconds(expt));
+            else if (command[8].ToUpper() == "EX")
+                db.Set(key, (object)val, DateTimeOffset.Now.AddSeconds(expt));
         }
         else
         {
@@ -201,23 +204,12 @@ int ParseDatabaseSection(byte[] data, int index)
     for (int i = 0; i < length; i++)
     {
         int expTime = 0;
-        if (data[index] == 0xFC)
-        {
-            index++;
-            // Parse the 8-byte unsigned long in little-endian format
-            long unixTimestamp = (long)BitConverter.ToUInt64(data.Skip(index).Take(8).ToArray(), 0);
-            index += 8; // Move past the 8 bytes
-            // Validate the Unix timestamp
-            if (unixTimestamp < -62135596800 || unixTimestamp > 253402300799)
-            {
-                Console.WriteLine($"Invalid Unix timestamp: {unixTimestamp}. Skipping key.");
-                continue; // Skip this key-value pair
-            }
-            // Convert Unix timestamp to relative milliseconds
-            DateTimeOffset expirationDate = DateTimeOffset.FromUnixTimeSeconds(unixTimestamp);
-            expTime = (int)(expirationDate - DateTimeOffset.Now).TotalMilliseconds;
-            Console.WriteLine($"Expiration time (Unix timestamp): {expTime}");
-        }
+
+        //Checking if the key has expiry or not
+        if (data[index] == 0xFC || data[index] == 0xFD)
+            expTime = ParseExpiryKey(data, ref index);
+
+        //Checking if the key is a string or not
         if (data[index] != 0x00)
         {
             throw new Exception("Data format other than string is not supported yet");
@@ -226,19 +218,21 @@ int ParseDatabaseSection(byte[] data, int index)
         int keyLength = data[index];
         Console.WriteLine($"Key length: {keyLength}");
         index++;
+        //Parsing the key
         string key = ParseString(data, ref index, keyLength);
         Console.WriteLine($"Key: {key}");
         int valueLength = data[index];
         Console.WriteLine($"Value length: {valueLength}");
         index++;
+        //Parsing the value
         string value = ParseString(data, ref index, valueLength);
         Console.WriteLine($"Value: {value}");
         Console.WriteLine($"Setting key: {key} with value: {value}");
+
+        // Set the key-value pair in the dictionary
         if (expTime > 0)
-        {
             db.Set(key, value, DateTimeOffset.Now.AddMilliseconds(expTime));
-        }
-        else
+        else if (expTime == 0)
             db.Set(key, value, DateTimeOffset.MaxValue);
     }
     return index;
@@ -249,4 +243,17 @@ string ParseString(byte[] data, ref int index, int length)
     string result = Encoding.Default.GetString(data.Skip(index).Take(length).ToArray());
     index += length;
     return result;
+}
+int ParseExpiryKey(byte[] data, ref int index)
+{
+    index++;
+    // Parse the 8-byte unsigned long in little-endian format
+    DateTime epoch = EPOCH;
+    var tempTime = BitConverter.ToInt64(data, index);
+    var dateTime = data[index - 1] == 0xFC ? epoch.AddMilliseconds(tempTime).ToUniversalTime() : epoch.AddSeconds(tempTime).ToUniversalTime();
+    index += 8;
+    var timeDifference = dateTime - DateTime.UtcNow;
+    int expTime = (int)timeDifference.TotalMilliseconds;
+    Console.WriteLine($"Expiration time in milliseconds: {expTime}");
+    return expTime;
 }
