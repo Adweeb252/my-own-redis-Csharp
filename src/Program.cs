@@ -14,6 +14,10 @@ DateTime EPOCH = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
 string dir = string.Empty;
 string dbFilename = string.Empty;
 int port = 0;
+
+//Replication variables
+string role = "master";
+
 args = Environment.GetCommandLineArgs();
 handleArguements(args);
 loadRDBfile();
@@ -151,6 +155,27 @@ void handleCommands(string[] command, Socket client)
             response += $"${key.Length}\r\n{key}\r\n";
         }
     }
+    else if (cmd == "INFO" && argsize == 2)
+    {
+        if (command[4] == "replication")
+        {
+            string content = $"role:{role}";
+            response = $"*11\r\n" +
+                   $"$11\r\nReplication\r\n" +
+                   $"${content.Length}\r\n{content}\r\n" +
+                   "$18\r\nconnected_slaves:0\r\n" +
+                   "$14\r\nmaster_replid:\r\n" +
+                   "$15\r\nmaster_replid2:\r\n" +
+                   "$20\r\nmaster_repl_offset:0\r\n" +
+                   "$20\r\nsecond_repl_offset:0\r\n" +
+                   "$21\r\nrepl_backlog_active:0\r\n" +
+                   "$19\r\nrepl_backlog_size:0\r\n" +
+                   "$32\r\nrepl_backlog_first_byte_offset:0\r\n" +
+                   "$22\r\nrepl_backlog_histlen:0\r\n";
+        }
+        else
+            response = $"-ERR applied it yet\r\n";
+    }
     else
     {
         response = "-ERR unknown command\r\n";
@@ -173,6 +198,10 @@ void handleArguements(string[] args)
         else if (args[i].Equals("--port") && i + 1 < args.Length)
         {
             port = int.Parse(args[i + 1]);
+        }
+        else if (args[i].Equals("--replicaof") && i + 1 < args.Length)
+        {
+            role = "slave";
         }
     }
 }

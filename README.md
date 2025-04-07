@@ -14,3 +14,5 @@ Note:- Multiple clients can connect with this server simultaneously and can send
 8. Now using EX option in SET command we can set key with expiry time in seconds.
 9. Now you can specify custom port number for the server to run using --port
    (E.g:- dotnet run -- --port 6381). Note: If port not specified it will run on default 6380 port.
+10. Info replication command implemented but it is giving hard coded data for now (only roles is dynamic depending on flag you give.
+    --replicaof is for slave by default you will become master)
