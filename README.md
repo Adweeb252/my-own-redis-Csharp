@@ -16,3 +16,4 @@ Note:- Multiple clients can connect with this server simultaneously and can send
    (E.g:- dotnet run -- --port 6381). Note: If port not specified it will run on default 6380 port.
 10. Info replication command implemented but it is giving hard coded data for now (only roles is dynamic depending on flag you give.
     --replicaof is for slave by default you will become master)
+11. Made a new port 6380 for master in MasterProgram.cs and working on implementing handshake when connecting slave with master.

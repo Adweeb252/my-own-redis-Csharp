@@ -2,6 +2,8 @@
 using System.Net.Sockets;
 using System.Text;
 using System.Runtime.Caching;
+using System.Threading.Tasks;
+using RedisMaster;
 
 // You can use print statements as follows for debugging, they'll be visible when running tests.
 Console.WriteLine("Logs from your program will appear here!");
@@ -17,9 +19,12 @@ int port = 0;
 
 //Replication variables
 string role = "master";
+string masterRid = randomStringGenerator(40);
+string masterOffset = "0";
+
 
 args = Environment.GetCommandLineArgs();
-handleArguements(args);
+await handleArguements(args);
 loadRDBfile();
 
 void loadRDBfile()
@@ -51,7 +56,6 @@ while (isServerRunning)
     var client = await acceptTask;
     Console.WriteLine($"Client connected at {client.RemoteEndPoint}");
     Task.Run(() => handleClient(client)); // handle client in a separate thread
-
 }
 void handleClient(Socket client)
 {
@@ -159,14 +163,16 @@ void handleCommands(string[] command, Socket client)
     {
         if (command[4] == "replication")
         {
-            string content = $"role:{role}";
+            string infoRole = $"role:{role}";
+            string infoMasterRid = $"master_replid:{masterRid}";
+            string infoMasterOffset = $"master_repl_offset:{masterOffset}";
             response = $"*11\r\n" +
                    $"$11\r\nReplication\r\n" +
-                   $"${content.Length}\r\n{content}\r\n" +
+                   $"${infoRole.Length}\r\n{infoRole}\r\n" +
                    "$18\r\nconnected_slaves:0\r\n" +
-                   "$14\r\nmaster_replid:\r\n" +
+                   $"${infoMasterRid.Length}\r\n{infoMasterRid}\r\n" +
                    "$15\r\nmaster_replid2:\r\n" +
-                   "$20\r\nmaster_repl_offset:0\r\n" +
+                   $"${infoMasterOffset.Length}\r\n{infoMasterOffset}\r\n" +
                    "$20\r\nsecond_repl_offset:0\r\n" +
                    "$21\r\nrepl_backlog_active:0\r\n" +
                    "$19\r\nrepl_backlog_size:0\r\n" +
@@ -183,7 +189,7 @@ void handleCommands(string[] command, Socket client)
     client.Send(Encoding.UTF8.GetBytes(response));
     Console.WriteLine($"Sent: {response}");
 }
-void handleArguements(string[] args)
+async Task handleArguements(string[] args)
 {
     for (int i = 0; i < args.Length; i++)
     {
@@ -202,7 +208,27 @@ void handleArguements(string[] args)
         else if (args[i].Equals("--replicaof") && i + 1 < args.Length)
         {
             role = "slave";
+            await handleMaster(args[i + 1]);
         }
+        else if (args[i].Equals("--master") && i + 1 < args.Length)
+        {
+            MasterProgram masterProgram = new MasterProgram();
+            await masterProgram.Run(args.Skip(i + 1).ToArray());
+        }
+    }
+}
+async Task handleMaster(string str)
+{
+    string[] master = str.Split(" ");
+    if (master.Length == 2)
+    {
+        string masterPort = master[1];
+        string masterHost = master[0];
+        // Connect to the master client on port 6380
+        TcpClient client = new TcpClient(masterHost, int.Parse(masterPort));
+        NetworkStream stream = client.GetStream();
+
+
     }
 }
 void ParseRedisData(byte[] data)
@@ -289,4 +315,16 @@ int ParseExpiryKey(byte[] data, ref int index)
     int expTime = (int)timeDifference.TotalMilliseconds;
     Console.WriteLine($"Expiration time in milliseconds: {expTime}");
     return expTime;
+}
+
+string randomStringGenerator(int length)
+{
+    var chars = "0123456789abcdefghijklmnopqrstuvwxyz";
+    var output = new StringBuilder();
+    var random = new Random();
+    for (int i = 0; i < length; i++)
+    {
+        output.Append(chars[random.Next(chars.Length)]);
+    }
+    return output.ToString();
 }
