@@ -17,6 +17,8 @@ DateTime EPOCH = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
 string dir = string.Empty;
 string dbFilename = string.Empty;
 int port = 0;
+string masterPort = string.Empty;
+string masterHost = string.Empty;
 List<int> slavePort = new List<int>();
 
 //Replication variables
@@ -190,11 +192,28 @@ void handleCommands(string message, Socket client)
     else if (cmd == "REPLCONF")
     {
         response = "+OK\r\n";
-        if (argsize >= 3 && command[4] == "listening-port")
+        if (argsize >= 3 && command[4].ToUpper() == "GETACK")
+        {
+            string ack = $"*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n";
+            // Connect to the master client on port 6380
+            TcpClient mClient = new TcpClient(masterHost, int.Parse(masterPort));
+            NetworkStream mStream = mClient.GetStream(); // connected to stream to send and recieve response
+            handleSendingToMaster(mStream, ack);
+        }
+        else if (argsize >= 3 && command[4] == "listening-port")
         {
             slavePort.Add(int.Parse(command[6]));
             Console.WriteLine($"Slave connected on port: {int.Parse(command[6])}");
         }
+        else if (role == "master" && command[4].ToUpper() == "ACK")
+        {
+            Console.WriteLine($"Received ACK from slave");
+        }
+    }
+    else if (cmd == "ACK")
+    {
+        handleSlave();
+        response = "+Getting Acknowledgement\r\n";
     }
     else if (cmd == "PSYNC")
     {
@@ -242,8 +261,8 @@ async Task handleMaster(string str)
     string[] master = str.Split(" ");
     if (master.Length == 2)
     {
-        string masterPort = master[1];
-        string masterHost = master[0];
+        masterPort = master[1];
+        masterHost = master[0];
         // Connect to the master client on port 6380
         TcpClient mClient = new TcpClient(masterHost, int.Parse(masterPort));
         NetworkStream mStream = mClient.GetStream(); // connected to stream to send and recieve response
@@ -288,6 +307,11 @@ async Task handleMaster(string str)
         //Final message after connecting
         Console.WriteLine("Slave is connected to the master");
     }
+}
+void handleSlave()
+{
+    string ackCommand = $"*3\r\n$8\r\nreplconf\r\n$6\r\ngetack\r\n$1\r\n*\r\n";
+    handleSendingToSlave(ackCommand);
 }
 string handleSendingToMaster(NetworkStream mStream, string command)
 {

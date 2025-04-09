@@ -46,3 +46,7 @@
 12. Implemented Single and Multiple Replica Propagation:
 
 - **If you use a write command in master like Set or Del, it will propagate to the connected Slaves**
+
+13. Implemented Acknowlendgment from master to slave
+
+- **After completion of handshakes, if a client send a `ACK` command then master asks for acknowledgement from slaves and slaves replies it with there offset propagated/bytes propagated (It is hard coded for now).**
