@@ -27,15 +27,23 @@ args = Environment.GetCommandLineArgs();
 await handleArguements(args);
 loadRDBfile();
 
+// Create a TCP/IP server.
+TcpListener server = new TcpListener(IPAddress.Any, port == 0 ? 6380 : port);
+server.Start();
+while (isServerRunning)
+{
+    var acceptTask = server.AcceptSocketAsync(); // wait for client
+    var client = await acceptTask;
+    Console.WriteLine($"Client connected at {client.RemoteEndPoint}");
+    Task.Run(() => handleClient(client)); // handle client in a separate thread
+}
 void loadRDBfile()
 {
     string filePath = Path.Combine(dir, dbFilename);
     if (!File.Exists(filePath))
     {
-        Console.WriteLine($"File {filePath} does not exists");
         return;
     }
-
     try
     {
         byte[] data = File.ReadAllBytes(filePath);
@@ -46,16 +54,6 @@ void loadRDBfile()
     {
         Console.WriteLine($"Error reading file: {ex.Message}");
     }
-}
-// Create a TCP/IP server.
-TcpListener server = new TcpListener(IPAddress.Any, port == 0 ? 6380 : port);
-server.Start();
-while (isServerRunning)
-{
-    var acceptTask = server.AcceptSocketAsync(); // wait for client
-    var client = await acceptTask;
-    Console.WriteLine($"Client connected at {client.RemoteEndPoint}");
-    Task.Run(() => handleClient(client)); // handle client in a separate thread
 }
 void handleClient(Socket client)
 {
@@ -182,6 +180,14 @@ void handleCommands(string[] command, Socket client)
         else
             response = $"-ERR applied it yet\r\n";
     }
+    else if (cmd == "REPLCONF")
+    {
+        response = "+OK\r\n";
+    }
+    else if (cmd == "PSYNC")
+    {
+        response = $"+FULLRESYNC {masterRid} {masterOffset}\r\n";
+    }
     else
     {
         response = "-ERR unknown command\r\n";
@@ -225,10 +231,72 @@ async Task handleMaster(string str)
         string masterPort = master[1];
         string masterHost = master[0];
         // Connect to the master client on port 6380
-        TcpClient client = new TcpClient(masterHost, int.Parse(masterPort));
-        NetworkStream stream = client.GetStream();
+        TcpClient mClient = new TcpClient(masterHost, int.Parse(masterPort));
+        NetworkStream mStream = mClient.GetStream(); // connected to stream to send and recieve response
 
+        //Handshake 1 by sending PING command
+        byte[] bytesToSend = Encoding.UTF8.GetBytes($"*1\r\n$4\r\nPING\r\n");
+        await mStream.WriteAsync(bytesToSend, 0, bytesToSend.Length);
+        //Recieving the response from master
+        byte[] buffer = new byte[1024];
+        int bytesRead = await mStream.ReadAsync(buffer, 0, buffer.Length);
+        string message = Encoding.UTF8.GetString(buffer, 0, bytesRead).Trim();
+        Console.WriteLine($"Received from master: {message}");
 
+        //Checking if the response is PONG or not
+        if (message != "+PONG")
+        {
+            Console.WriteLine("Failed to connect to master.");
+            return;
+        }
+        //Handshake 2 by sending REPLCONF listening-port {slave-port} command
+        string replconfCommand1 = $"*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n6381\r\n";
+        byte[] replconfBytes1 = Encoding.UTF8.GetBytes(replconfCommand1);
+        await mStream.WriteAsync(replconfBytes1, 0, replconfBytes1.Length);
+        // Recieving the response from the master
+        bytesRead = await mStream.ReadAsync(buffer, 0, buffer.Length);
+        message = Encoding.UTF8.GetString(buffer, 0, bytesRead).Trim();
+        Console.WriteLine($"Received from master: {message}");
+
+        //Checking if response is OK or not
+        if (message != "+OK")
+        {
+            Console.WriteLine("Failed to send REPLCONF listening-port command.");
+            return;
+        }
+        //Handshake 3 by sending REPLCONF capa psync2 command
+        string replconfCommand2 = $"*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n";
+        byte[] replconfBytes2 = Encoding.UTF8.GetBytes(replconfCommand2);
+        await mStream.WriteAsync(replconfBytes2, 0, replconfBytes2.Length);
+        // Recieving the response from the master
+        bytesRead = await mStream.ReadAsync(buffer, 0, buffer.Length);
+        message = Encoding.UTF8.GetString(buffer, 0, bytesRead).Trim();
+        Console.WriteLine($"Received from master: {message}");
+
+        //Checking if response is OK or not
+        if (message != "+OK")
+        {
+            Console.WriteLine("Failed to send REPLCONF capa psync2 command.");
+            return;
+        }
+        //Handshake 4 by sending PSYNC command
+        string psyncCommand = $"*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n";
+        byte[] psyncBytes = Encoding.UTF8.GetBytes(psyncCommand);
+        await mStream.WriteAsync(psyncBytes, 0, psyncBytes.Length);
+        // Recieving the response from the master
+        bytesRead = await mStream.ReadAsync(buffer, 0, buffer.Length);
+        message = Encoding.UTF8.GetString(buffer, 0, bytesRead).Trim();
+        Console.WriteLine($"Received from master: {message}");
+
+        //Checking if response is FULLRESYNC or not
+        if (!message.Contains("+FULLRESYNC"))
+        {
+            Console.WriteLine("Failed to send PSYNC command.");
+            return;
+        }
+
+        //Final message after connecting
+        Console.WriteLine("Slave is connected to the master");
     }
 }
 void ParseRedisData(byte[] data)

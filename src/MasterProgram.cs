@@ -159,6 +159,10 @@ namespace RedisMaster
                     response += $"${key.Length}\r\n{key}\r\n";
                 }
             }
+            else if (cmd == "REPLCONF")
+            {
+                response = "+OK\r\n";
+            }
             else
             {
                 response = "-ERR unknown command\r\n";
