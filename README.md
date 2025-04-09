@@ -35,9 +35,13 @@
     (The slave sends these handshakes to the master, and the master responds accordingly.)
 
 ### Example for Using Master and Slave:
+
 - In the first terminal, run:  
   `dotnet run -- --port <master_port>`
 - In the second terminal, run:  
   `dotnet run -- --port <slave_port> --replicaof "127.0.0.1 <master_port>"`
 - Handshakes will happen automatically, and you will receive a final console message:  
   **"Slave is connected to the master."**
+
+12. Implemented Single Replica Propagation:
+    - **If you use a write command in master like Set or Del, it will propagate to the connected Slave**
