@@ -43,6 +43,6 @@
 - Handshakes will happen automatically, and you will receive a final console message:  
   **"Slave is connected to the master."**
 
-12. Implemented Single Replica Propagation:
+12. Implemented Single and Multiple Replica Propagation:
 
-- **If you use a write command in master like Set or Del, it will propagate to the connected Slave**
+- **If you use a write command in master like Set or Del, it will propagate to the connected Slaves**

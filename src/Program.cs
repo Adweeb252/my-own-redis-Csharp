@@ -17,7 +17,7 @@ DateTime EPOCH = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
 string dir = string.Empty;
 string dbFilename = string.Empty;
 int port = 0;
-int slavePort = 0;
+List<int> slavePort = new List<int>();
 
 //Replication variables
 string role = "master";
@@ -192,8 +192,8 @@ void handleCommands(string message, Socket client)
         response = "+OK\r\n";
         if (argsize >= 3 && command[4] == "listening-port")
         {
-            slavePort = int.Parse(command[6]);
-            Console.WriteLine($"Slave connected on port: {slavePort}");
+            slavePort.Add(int.Parse(command[6]));
+            Console.WriteLine($"Slave connected on port: {int.Parse(command[6])}");
         }
     }
     else if (cmd == "PSYNC")
@@ -301,10 +301,15 @@ string handleSendingToMaster(NetworkStream mStream, string command)
 }
 void handleSendingToSlave(string message)
 {
-    TcpClient sClient = new TcpClient("127.0.0.1", slavePort);
-    NetworkStream sStream = sClient.GetStream(); // connected to stream to send and recieve response
-    byte[] bytesToSend = Encoding.UTF8.GetBytes(message);
-    sStream.Write(bytesToSend, 0, bytesToSend.Length);
+    for (int i = 0; i < slavePort.Count; i++)
+    {
+        TcpClient sClient = new TcpClient("127.0.0.1", slavePort[i]);
+        Console.WriteLine($"Connected to slave on port: {slavePort[i]}");
+        NetworkStream sStream = sClient.GetStream(); // connected to stream to send and recieve response
+        byte[] bytesToSend = Encoding.UTF8.GetBytes(message);
+        sStream.Write(bytesToSend, 0, bytesToSend.Length);
+    }
+
 }
 void ParseRedisData(byte[] data)
 {
