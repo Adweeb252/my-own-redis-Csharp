@@ -44,4 +44,5 @@
   **"Slave is connected to the master."**
 
 12. Implemented Single Replica Propagation:
-    - **If you use a write command in master like Set or Del, it will propagate to the connected Slave**
+
+- **If you use a write command in master like Set or Del, it will propagate to the connected Slave**
