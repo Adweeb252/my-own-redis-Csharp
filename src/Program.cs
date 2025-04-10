@@ -26,13 +26,14 @@ List<int> slavePort = new List<int>();
 int slaveOffset = 0;
 bool masterCommand = false;
 
-int countSlaveProcessed = 0;
+int countSlaveProcessed = 0;//count of slaves processed for wait command
 
 //Replication variables
 string role = "master";
 string masterRid = randomStringGenerator(40);
 string masterOffset = "0";
 
+string lastStreamId = "0-0"; // last stream id for XADD command
 
 args = Environment.GetCommandLineArgs();
 await handleArguements(args);
@@ -82,7 +83,7 @@ void handleClient(Socket client)
 }
 async Task handleCommands(string message, Socket client)
 {
-    if (message.StartsWith("MASTER:"))
+    if (message.StartsWith("MASTER:"))//checks if the commands is sent by master or client
     {
         masterCommand = true;
         message = message.Substring(7);
@@ -93,7 +94,7 @@ async Task handleCommands(string message, Socket client)
     int argsize = int.Parse(cmdsize); //arguement size which is the first line
     string cmd = command[2].ToUpper();
     string response = "none";
-    if (cmd == "SET" && argsize >= 3)
+    if (cmd == "SET" && argsize >= 3)//Set's the key to the value
     {
         string key = command[4];
         string val = command[6];
@@ -115,12 +116,12 @@ async Task handleCommands(string message, Socket client)
         {
             Task.Run(() => handleSendingToSlave(message));
         }
-        else if (masterCommand)
+        else if (masterCommand)//offset count is updated if the command is sent by master
         {
             slaveOffset += Encoding.UTF8.GetByteCount(message) + 2;
         }
     }
-    else if (cmd == "GET" && argsize == 2)
+    else if (cmd == "GET" && argsize == 2)//gets the key if it exists
     {
         string key = command[4];
         if (db[key] != null)
@@ -132,7 +133,7 @@ async Task handleCommands(string message, Socket client)
             response = "$-1\r\n";
         }
     }
-    else if (cmd == "PING")
+    else if (cmd == "PING")//pings the connection
     {
         response = "+PONG\r\n";
         if (role == "master")//Syncing the write command to slave
@@ -144,7 +145,7 @@ async Task handleCommands(string message, Socket client)
             slaveOffset += Encoding.UTF8.GetByteCount(message) + 2;
         }
     }
-    else if (cmd == "ECHO" && argsize > 1)
+    else if (cmd == "ECHO" && argsize > 1)//echo's the string
     {
         string echo = "";
         for (int i = 4; i < command.Length; i += 2)
@@ -153,7 +154,7 @@ async Task handleCommands(string message, Socket client)
         }
         response = $"+{echo}\r\n";
     }
-    else if (cmd == "CONFIG" && command[4].ToUpper() == "GET" && argsize == 3)
+    else if (cmd == "CONFIG" && command[4].ToUpper() == "GET" && argsize == 3)//used to get the directories of dir or dbfilename
     {
         if (command[6].Equals("dir"))
         {
@@ -164,7 +165,7 @@ async Task handleCommands(string message, Socket client)
             response = $"*2\r\n$3\r\ndir\r\n${dbFilename.Length}\r\n{dbFilename}\r\n";
         }
     }
-    else if (cmd == "KEYS" && argsize == 2)
+    else if (cmd == "KEYS" && argsize == 2)//used to get the keys present in the database
     {
         string pattern = command[4];
         List<string> matchingKeys = new List<string>();
@@ -190,7 +191,7 @@ async Task handleCommands(string message, Socket client)
             response += $"${key.Length}\r\n{key}\r\n";
         }
     }
-    else if (cmd == "INFO" && argsize == 2)
+    else if (cmd == "INFO" && argsize == 2)//gets the replication info of the port/connection
     {
         if (command[4] == "replication")
         {
@@ -213,22 +214,22 @@ async Task handleCommands(string message, Socket client)
         else
             response = $"-ERR applied it yet\r\n";
     }
-    else if (cmd == "REPLCONF")
+    else if (cmd == "REPLCONF")//2nd and 3rd handshakes and also used for getting acknowledgement
     {
         response = "+OK\r\n";
-        if (argsize >= 3 && command[4].ToUpper() == "GETACK" && role == "master")
+        if (argsize >= 3 && command[4].ToUpper() == "GETACK" && role == "master")//master is getting the ACK from slave
         {
             response = $"+Getting acknowledgement from slave\r\n";
             Task.Run(() => handleSendingToSlave(message));
         }
-        else if (argsize >= 3 && command[4].ToUpper() == "GETACK")
+        else if (argsize >= 3 && command[4].ToUpper() == "GETACK")//master is asking for acknowledgment from slave
         {
             string slaveOffsetString = slaveOffset.ToString();
             string ack = $"*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n${slaveOffsetString.Length}\r\n{slaveOffsetString}\r\n";
             // Connect to the master client on port 6380
             TcpClient mClient = new TcpClient(masterHost, int.Parse(masterPort));
             NetworkStream mStream = mClient.GetStream(); // connected to stream to send and recieve response
-            handleSendingToMaster(mStream, ack);
+            handleSendingToMaster(mStream, ack);//sending the ack to master
         }
         else if (argsize >= 3 && command[4] == "listening-port")
         {
@@ -246,7 +247,7 @@ async Task handleCommands(string message, Socket client)
             Console.WriteLine($"message propagated:{message}");
         }
     }
-    else if (cmd == "PSYNC")
+    else if (cmd == "PSYNC")//Final handshake that fully syncs the slave with master and also sends the empty rdb file
     {
         response = $"+FULLRESYNC {masterRid} {masterOffset}\r\n";
         string rdbContents = "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2";
@@ -256,16 +257,11 @@ async Task handleCommands(string message, Socket client)
     {
         int slaveCount = int.Parse(command[4]);
         int timeout = int.Parse(command[6]);
-        Stopwatch stopwatch = new Stopwatch();
-        stopwatch.Start();
-        while (countSlaveProcessed < slaveCount && timeout > 0)
+        while (countSlaveProcessed < slaveCount && timeout > 0)//wait till count of slaves processed is equal to slave count sent by client or the timeout occurs
         {
             await Task.Delay(100); // wait for 100 ms
             timeout -= 100;
         }
-        stopwatch.Stop();
-        TimeSpan elapsed = stopwatch.Elapsed;
-        Console.WriteLine($"Elapsed time in while loop for wait command: {elapsed.TotalMilliseconds} ms");
         response = $"+{slavePort.Count}\r\n";
     }
     else if (cmd == "TYPE")
@@ -275,16 +271,35 @@ async Task handleCommands(string message, Socket client)
         if (db[key] != null)
         {
             if (int.TryParse(val, out _))
-                response = $"+integer\r\n";
+                response = $"+integer\r\n"; //key is a integer type
             else if (bool.TryParse(val, out _))
-                response = $"+boolean\r\n";
+                response = $"+boolean\r\n";//key is a boolean type
             else
-                response = $"+string\r\n";
+                response = $"+string\r\n";//key is a string type
         }
         else
         {
             response = "$-1\r\n";
         }
+
+        if (db[val] != null)
+            response = $"+stream\r\n";//key is a stream type
+    }
+    else if (cmd == "XADD")//to add stream data types
+    {
+        string streamKey = command[4];
+        string streamId = command[6];
+        if (!checkStreamId(streamId))
+        {
+            response = "-ERR invalid stream id\r\n";
+            client.Send(Encoding.UTF8.GetBytes(response));
+            Console.WriteLine($"Sent: {response}");
+            return;
+        }
+        string keyValuePairs = string.Join(" ", command.Skip(8)); // all the key-value pairs stored as entries in the stream
+        db.Set(streamKey, (object)streamId, DateTimeOffset.MaxValue);
+        db.Set(streamId, (object)keyValuePairs, DateTimeOffset.MaxValue); // setting the stream id as key for key-value pairs so that during Type command , it can be identified as stream
+        response = $"+{streamId}\r\n";
     }
     else
     {
@@ -494,4 +509,21 @@ string randomStringGenerator(int length)
         output.Append(chars[random.Next(chars.Length)]);
     }
     return output.ToString();
+}
+
+bool checkStreamId(string streamId)//checking if the stream Id is valid or not
+{
+    string[] timeSeq = streamId.Split("-");
+    if (timeSeq.Length != 2)
+        return false;
+    string[] lastTimeSeq = lastStreamId.Split("-");
+    if (int.Parse(timeSeq[0]) < int.Parse(lastTimeSeq[0]))//if the milliseconds time is less than the last time
+        return false;
+    else if (int.Parse(timeSeq[1]) < int.Parse(lastTimeSeq[1]))//if the sequence number is less than the last sequence number
+        return false;
+    else if (int.Parse(timeSeq[0]) == int.Parse(lastTimeSeq[0]) && int.Parse(timeSeq[1]) == int.Parse(lastTimeSeq[1]))//if the time and sequence number is same
+        return false;
+
+    lastStreamId = streamId;//updating the last stream id
+    return true;
 }
