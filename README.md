@@ -50,3 +50,7 @@
 13. Implemented Acknowlendgment from master to slave
 
 - **After completion of handshakes, if a client send a `REPLCONF GETACK *` command then master asks for acknowledgement from slaves and slaves replies it with there offset propagated/bytes propagated(Only SET and PING commands are propagated).**
+
+14. Wait command implemented
+
+- **When you run `WAIT <slave_count> <wait_time>` if you have run a write command or ping command before this then the client will wait until <slave_count> number of slaves are processed or the <wait_time> is elapsed whichever satisfies first**

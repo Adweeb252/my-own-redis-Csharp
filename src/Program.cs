@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using RedisMaster;
 using System.Data.SqlTypes;
 using System.Diagnostics.Eventing.Reader;
+using System.Diagnostics;
 
 // You can use print statements as follows for debugging, they'll be visible when running tests.
 Console.WriteLine("Logs from your program will appear here!");
@@ -24,6 +25,8 @@ List<int> slavePort = new List<int>();
 
 int slaveOffset = 0;
 bool masterCommand = false;
+
+int countSlaveProcessed = 0;
 
 //Replication variables
 string role = "master";
@@ -77,7 +80,7 @@ void handleClient(Socket client)
         handleCommands(message, client);
     }
 }
-void handleCommands(string message, Socket client)
+async Task handleCommands(string message, Socket client)
 {
     if (message.StartsWith("MASTER:"))
     {
@@ -110,7 +113,7 @@ void handleCommands(string message, Socket client)
         response = "+OK\r\n";
         if (role == "master")//Syncing the write command to slave
         {
-            handleSendingToSlave(message);
+            Task.Run(() => handleSendingToSlave(message));
         }
         else if (masterCommand)
         {
@@ -134,7 +137,7 @@ void handleCommands(string message, Socket client)
         response = "+PONG\r\n";
         if (role == "master")//Syncing the write command to slave
         {
-            handleSendingToSlave(message);
+            Task.Run(() => handleSendingToSlave(message));
         }
         else if (masterCommand)
         {
@@ -216,7 +219,7 @@ void handleCommands(string message, Socket client)
         if (argsize >= 3 && command[4].ToUpper() == "GETACK" && role == "master")
         {
             response = $"+Getting acknowledgement from slave\r\n";
-            handleSendingToSlave(message);
+            Task.Run(() => handleSendingToSlave(message));
         }
         else if (argsize >= 3 && command[4].ToUpper() == "GETACK")
         {
@@ -248,6 +251,22 @@ void handleCommands(string message, Socket client)
         response = $"+FULLRESYNC {masterRid} {masterOffset}\r\n";
         string rdbContents = "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2";
         response += $"{rdbContents.Length}\r\n{rdbContents}";
+    }
+    else if (cmd == "WAIT" && role == "master")
+    {
+        int slaveCount = int.Parse(command[4]);
+        int timeout = int.Parse(command[6]);
+        Stopwatch stopwatch = new Stopwatch();
+        stopwatch.Start();
+        while (countSlaveProcessed < slaveCount && timeout > 0)
+        {
+            await Task.Delay(100); // wait for 100 ms
+            timeout -= 100;
+        }
+        stopwatch.Stop();
+        TimeSpan elapsed = stopwatch.Elapsed;
+        Console.WriteLine($"Elapsed time in while loop for wait command: {elapsed.TotalMilliseconds} ms");
+        response = $"+{slavePort.Count}\r\n";
     }
     else
     {
@@ -336,11 +355,6 @@ async Task handleMaster(string str)
         Console.WriteLine("Slave is connected to the master");
     }
 }
-void handleSlave()
-{
-    string ackCommand = $"*3\r\n$8\r\nreplconf\r\n$6\r\ngetack\r\n$1\r\n*\r\n";
-    handleSendingToSlave(ackCommand);
-}
 string handleSendingToMaster(NetworkStream mStream, string command)
 {
     byte[] bytesToSend = Encoding.UTF8.GetBytes(command);
@@ -360,6 +374,9 @@ void handleSendingToSlave(string message)
         string masterMessage = $"MASTER:{message}";
         byte[] bytesToSend = Encoding.UTF8.GetBytes(masterMessage);
         sStream.Write(bytesToSend, 0, bytesToSend.Length);
+        byte[] buffer = new byte[1024];
+        int bytesRead = sStream.Read(buffer, 0, buffer.Length);
+        countSlaveProcessed++;
     }
 
 }
