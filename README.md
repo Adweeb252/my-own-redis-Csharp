@@ -61,4 +61,5 @@
 
 16. Implemented XADD command which Creats stream type data and also validating there stream Ids
 
--**when you want to add stream type data you can run `XADD stream_key stream_id <key1> <value1> <key2> <value2>` to create a stream type data which can have entries and also only the validating/correct stream Ids can be used whiich means.** -**E.g. Stream Ids are of this type 0-1 in which first 0 is in milliseconds and 1 is entry number so every stream Id should be unique even if they are added at same milli second, it should have different entry number.**
+- **when you want to add stream type data you can run `XADD stream_key stream_id <key1> <value1> <key2> <value2>` to create a stream type data which can have entries and also only the validating/correct stream Ids can be used whiich means.**
+- **E.g. Stream Ids are of this type 0-1 in which first 0 is in milliseconds and 1 is entry number so every stream Id should be unique even if they are added at same milli second, it should have different entry number.**
