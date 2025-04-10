@@ -268,6 +268,24 @@ async Task handleCommands(string message, Socket client)
         Console.WriteLine($"Elapsed time in while loop for wait command: {elapsed.TotalMilliseconds} ms");
         response = $"+{slavePort.Count}\r\n";
     }
+    else if (cmd == "TYPE")
+    {
+        string key = command[4];
+        string val = db[key].ToString();
+        if (db[key] != null)
+        {
+            if (int.TryParse(val, out _))
+                response = $"+integer\r\n";
+            else if (bool.TryParse(val, out _))
+                response = $"+boolean\r\n";
+            else
+                response = $"+string\r\n";
+        }
+        else
+        {
+            response = "$-1\r\n";
+        }
+    }
     else
     {
         response = "-ERR unknown command\r\n";

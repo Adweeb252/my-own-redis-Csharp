@@ -54,3 +54,7 @@
 14. Wait command implemented
 
 - **When you run `WAIT <slave_count> <wait_time>` if you have run a write command or ping command before this then the client will wait until <slave_count> number of slaves are processed or the <wait_time> is elapsed whichever satisfies first**
+
+15. Type Command implemented
+
+- **When you want to know the data type of key you can run `TYPE <key>`, if this key exits then the type will be returned else null will be returned(for now only string, integer, boolean types are returned others are returned as string itself)**
