@@ -49,4 +49,4 @@
 
 13. Implemented Acknowlendgment from master to slave
 
-- **After completion of handshakes, if a client send a `ACK` command then master asks for acknowledgement from slaves and slaves replies it with there offset propagated/bytes propagated (It is hard coded for now).**
+- **After completion of handshakes, if a client send a `REPLCONF GETACK *` command then master asks for acknowledgement from slaves and slaves replies it with there offset propagated/bytes propagated(Only SET and PING commands are propagated).**

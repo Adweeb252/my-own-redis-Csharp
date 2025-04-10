@@ -5,6 +5,7 @@ using System.Runtime.Caching;
 using System.Threading.Tasks;
 using RedisMaster;
 using System.Data.SqlTypes;
+using System.Diagnostics.Eventing.Reader;
 
 // You can use print statements as follows for debugging, they'll be visible when running tests.
 Console.WriteLine("Logs from your program will appear here!");
@@ -20,6 +21,9 @@ int port = 0;
 string masterPort = string.Empty;
 string masterHost = string.Empty;
 List<int> slavePort = new List<int>();
+
+int slaveOffset = 0;
+bool masterCommand = false;
 
 //Replication variables
 string role = "master";
@@ -75,6 +79,11 @@ void handleClient(Socket client)
 }
 void handleCommands(string message, Socket client)
 {
+    if (message.StartsWith("MASTER:"))
+    {
+        masterCommand = true;
+        message = message.Substring(7);
+    }
     var command = message.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
     string cmdsize = command[0].Substring(1);
 
@@ -103,6 +112,10 @@ void handleCommands(string message, Socket client)
         {
             handleSendingToSlave(message);
         }
+        else if (masterCommand)
+        {
+            slaveOffset += Encoding.UTF8.GetByteCount(message) + 2;
+        }
     }
     else if (cmd == "GET" && argsize == 2)
     {
@@ -119,6 +132,14 @@ void handleCommands(string message, Socket client)
     else if (cmd == "PING")
     {
         response = "+PONG\r\n";
+        if (role == "master")//Syncing the write command to slave
+        {
+            handleSendingToSlave(message);
+        }
+        else if (masterCommand)
+        {
+            slaveOffset += Encoding.UTF8.GetByteCount(message) + 2;
+        }
     }
     else if (cmd == "ECHO" && argsize > 1)
     {
@@ -176,7 +197,7 @@ void handleCommands(string message, Socket client)
             response = $"*11\r\n" +
                    $"$11\r\nReplication\r\n" +
                    $"${infoRole.Length}\r\n{infoRole}\r\n" +
-                   "$18\r\nconnected_slaves:0\r\n" +
+                   $"$18\r\nconnected_slaves:{slavePort.Count}\r\n" +
                    $"${infoMasterRid.Length}\r\n{infoMasterRid}\r\n" +
                    "$15\r\nmaster_replid2:\r\n" +
                    $"${infoMasterOffset.Length}\r\n{infoMasterOffset}\r\n" +
@@ -192,9 +213,15 @@ void handleCommands(string message, Socket client)
     else if (cmd == "REPLCONF")
     {
         response = "+OK\r\n";
-        if (argsize >= 3 && command[4].ToUpper() == "GETACK")
+        if (argsize >= 3 && command[4].ToUpper() == "GETACK" && role == "master")
         {
-            string ack = $"*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n";
+            response = $"+Getting acknowledgement from slave\r\n";
+            handleSendingToSlave(message);
+        }
+        else if (argsize >= 3 && command[4].ToUpper() == "GETACK")
+        {
+            string slaveOffsetString = slaveOffset.ToString();
+            string ack = $"*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n${slaveOffsetString.Length}\r\n{slaveOffsetString}\r\n";
             // Connect to the master client on port 6380
             TcpClient mClient = new TcpClient(masterHost, int.Parse(masterPort));
             NetworkStream mStream = mClient.GetStream(); // connected to stream to send and recieve response
@@ -207,13 +234,14 @@ void handleCommands(string message, Socket client)
         }
         else if (role == "master" && command[4].ToUpper() == "ACK")
         {
-            Console.WriteLine($"Received ACK from slave");
+            Console.WriteLine($"Received ACK from slave with offset: {command[6]}");
         }
-    }
-    else if (cmd == "ACK")
-    {
-        handleSlave();
-        response = "+Getting Acknowledgement\r\n";
+
+        if (masterCommand)
+        {
+            slaveOffset += Encoding.UTF8.GetByteCount(message) + 2;
+            Console.WriteLine($"message propagated:{message}");
+        }
     }
     else if (cmd == "PSYNC")
     {
@@ -249,11 +277,11 @@ async Task handleArguements(string[] args)
             role = "slave";
             await handleMaster(args[i + 1]);
         }
-        else if (args[i].Equals("--master") && i + 1 < args.Length)
-        {
-            MasterProgram masterProgram = new MasterProgram();
-            await masterProgram.Run(args.Skip(i + 1).ToArray());
-        }
+        // else if (args[i].Equals("--master") && i + 1 < args.Length)
+        // {
+        //     MasterProgram masterProgram = new MasterProgram();
+        //     await masterProgram.Run(args.Skip(i + 1).ToArray());
+        // }
     }
 }
 async Task handleMaster(string str)
@@ -328,9 +356,9 @@ void handleSendingToSlave(string message)
     for (int i = 0; i < slavePort.Count; i++)
     {
         TcpClient sClient = new TcpClient("127.0.0.1", slavePort[i]);
-        Console.WriteLine($"Connected to slave on port: {slavePort[i]}");
         NetworkStream sStream = sClient.GetStream(); // connected to stream to send and recieve response
-        byte[] bytesToSend = Encoding.UTF8.GetBytes(message);
+        string masterMessage = $"MASTER:{message}";
+        byte[] bytesToSend = Encoding.UTF8.GetBytes(masterMessage);
         sStream.Write(bytesToSend, 0, bytesToSend.Length);
     }
 
