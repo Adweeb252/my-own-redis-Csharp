@@ -289,13 +289,19 @@ async Task handleCommands(string message, Socket client)
     {
         string streamKey = command[4];
         string streamId = command[6];
-        if (!checkStreamId(streamId))
+        if (streamId == "*")
+            streamId = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString() + "-*";
+        string[] timeSeq = streamId.Split("-");
+        if (timeSeq[0] != "*" && timeSeq[1] == "*")
+            generateSequenceForStreamId(ref timeSeq);
+        if (!checkStreamId(timeSeq))
         {
             response = "-ERR invalid stream id\r\n";
             client.Send(Encoding.UTF8.GetBytes(response));
             Console.WriteLine($"Sent: {response}");
             return;
         }
+        streamId = timeSeq[0] + "-" + timeSeq[1];
         string keyValuePairs = string.Join(" ", command.Skip(8)); // all the key-value pairs stored as entries in the stream
         db.Set(streamKey, (object)streamId, DateTimeOffset.MaxValue);
         db.Set(streamId, (object)keyValuePairs, DateTimeOffset.MaxValue); // setting the stream id as key for key-value pairs so that during Type command , it can be identified as stream
@@ -511,19 +517,33 @@ string randomStringGenerator(int length)
     return output.ToString();
 }
 
-bool checkStreamId(string streamId)//checking if the stream Id is valid or not
+bool checkStreamId(string[] timeSeq)//checking if the stream Id is valid or not
 {
-    string[] timeSeq = streamId.Split("-");
     if (timeSeq.Length != 2)
         return false;
     string[] lastTimeSeq = lastStreamId.Split("-");
-    if (int.Parse(timeSeq[0]) < int.Parse(lastTimeSeq[0]))//if the milliseconds time is less than the last time
+    if (long.Parse(timeSeq[0]) < long.Parse(lastTimeSeq[0]))//if the milliseconds time is less than the last time
         return false;
-    else if (int.Parse(timeSeq[1]) < int.Parse(lastTimeSeq[1]))//if the sequence number is less than the last sequence number
+    else if (long.Parse(timeSeq[0]) == long.Parse(lastTimeSeq[0]) && long.Parse(timeSeq[1]) <= long.Parse(lastTimeSeq[1]))//if the sequence number is less than the last sequence number and milliseconds are equal
         return false;
-    else if (int.Parse(timeSeq[0]) == int.Parse(lastTimeSeq[0]) && int.Parse(timeSeq[1]) == int.Parse(lastTimeSeq[1]))//if the time and sequence number is same
-        return false;
-
+    string streamId = timeSeq[0] + "-" + timeSeq[1];
     lastStreamId = streamId;//updating the last stream id
     return true;
+}
+
+void generateSequenceForStreamId(ref string[] timeSeq)//generating the sequence number for stream id
+{
+    if (db[timeSeq[0]] != null)
+    {
+        long seq = long.Parse(db[timeSeq[0]].ToString()) + 1;
+        db.Set(timeSeq[0], (object)seq, DateTimeOffset.MaxValue);
+    }
+    else
+        db.Set(timeSeq[0], (object)0, DateTimeOffset.MaxValue);
+    timeSeq[1] = db[timeSeq[0]].ToString();
+    if (timeSeq[0] == "0" && timeSeq[1] == "0")//if streamId is set to be 0-0 we had t change it as it can't be 0-0
+    {
+        timeSeq[0] = "0";
+        timeSeq[1] = "1";
+    }
 }
