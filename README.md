@@ -68,4 +68,6 @@
 
 17. Implemented XRANGE command which retrieves a range of entries from a stream.
 
-- **when you want to retrieve entries of a specific ids from a stream key you can use this command `XRANGE stream_key <streamId1> <streamId2>`.**
+- **when you want to retrieve entries from start specific id to end specific id from a stream key you can use this command `XRANGE stream_key <streamId1> <streamId2>`.**
+- **you can also use - in place of streamId1 to get all the ids of that stream till the end stream id like this: `XRANGE stream_key - <streamId2>`.**
+- **you can also use + in place of streamId2 to get all the ids of the stream after streamId1 to till last streamId like this: `XRANGE stream_key <streamId1> +`.**

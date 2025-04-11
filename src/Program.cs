@@ -326,17 +326,23 @@ async Task handleCommands(string message, Socket client)
     }
     else if (cmd == "XRANGE" && argsize >= 2 && streamKeyDB.ContainsKey(command[4]))
     {
-        int idCount = argsize - 2;
-        response = $"*{idCount}\r\n";
-        for (int i = 6; i < command.Length; i += 2)
+        string start = command[6].Contains("-") ? command[6] : command[6] + "-0";
+        string end = command[8].Contains("-") ? command[8] : command[8] + "-0";
+        if (command[6] == "-")
         {
-            string streamid = command[i];
-            if (!streamid.Contains("-"))
-            {
-                streamid = streamid + "-0";
-            }
-            if (!streamIdDB.ContainsKey(streamid))
-                continue;
+            start = streamKeyDB[command[4]][0];
+        }
+        if (command[8] == "+")
+        {
+            end = streamKeyDB[command[4]].Last();
+        }
+        int startIndex = Array.IndexOf(streamKeyDB[command[4]], start);
+        int endIndex = Array.IndexOf(streamKeyDB[command[4]], end);
+        int idCount = endIndex - startIndex + 1;
+        response = $"*{idCount}\r\n";
+        for (int i = startIndex; i <= endIndex; i++)
+        {
+            string streamid = streamKeyDB[command[4]][i];
             response += $"*2\r\n${streamid.Length}\r\n{streamid}\r\n*{streamIdDB[streamid].Count}\r\n";
             foreach (var keyValue in streamIdDB[streamid])
             {
