@@ -65,3 +65,7 @@
 - **E.g. Stream Ids are of this type 0-1 in which first 0 is in milliseconds and 1 is entry number so every stream Id should be unique even if they are added at same milli second, it should have different entry number.**
 - **You can also generate partial stream Ids like `XADD stream_key 12345-* <key1> <value1>` this will generate the sequence number automatically that doesn't exist already in the database for this time stamp part of streamId.**
 - **You can also generate Full stream Ids like `XADD stream_key * <key1> <value1>` this will generate the time part as well as sequence number automatically which doesn't exist already in the database.**
+
+17. Implemented XRANGE command which retrieves a range of entries from a stream.
+
+- **when you want to retrieve entries of a specific ids from a stream key you can use this command `XRANGE stream_key <streamId1> <streamId2>`.**

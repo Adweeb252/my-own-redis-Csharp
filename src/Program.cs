@@ -34,6 +34,9 @@ string masterRid = randomStringGenerator(40);
 string masterOffset = "0";
 
 string lastStreamId = "0-0"; // last stream id for XADD command
+Dictionary<string, string[]> streamKeyDB = new Dictionary<string, string[]>();//for storing the stream key and the stream ids
+Dictionary<string, List<string>> streamIdDB = new Dictionary<string, List<string>>();//for storing the stream ids and the key-value pairs
+Dictionary<string, string> timeStampDB = new Dictionary<string, string>();//for storing the stream ids and the time stamps
 
 args = Environment.GetCommandLineArgs();
 await handleArguements(args);
@@ -282,7 +285,7 @@ async Task handleCommands(string message, Socket client)
             response = "$-1\r\n";
         }
 
-        if (db[val] != null)
+        if (streamKeyDB[key] != null)
             response = $"+stream\r\n";//key is a stream type
     }
     else if (cmd == "XADD")//to add stream data types
@@ -303,9 +306,43 @@ async Task handleCommands(string message, Socket client)
         }
         streamId = timeSeq[0] + "-" + timeSeq[1];
         string keyValuePairs = string.Join(" ", command.Skip(8)); // all the key-value pairs stored as entries in the stream
-        db.Set(streamKey, (object)streamId, DateTimeOffset.MaxValue);
-        db.Set(streamId, (object)keyValuePairs, DateTimeOffset.MaxValue); // setting the stream id as key for key-value pairs so that during Type command , it can be identified as stream
+        List<string> keyValueList = new List<string>();
+        for (int i = 8; i < command.Length; i += 2)
+        {
+            keyValueList.Add(command[i]);
+        }
+        if (!streamKeyDB.ContainsKey(streamKey))
+        {
+            streamKeyDB[streamKey] = new string[] { streamId };
+        }
+        else
+        {
+            var existingIds = streamKeyDB[streamKey].ToList();
+            existingIds.Add(streamId);
+            streamKeyDB[streamKey] = existingIds.ToArray();
+        }
+        streamIdDB[streamId] = keyValueList; // setting the stream id as key for key-value pairs so that during Type command , it can be identified as stream
         response = $"+{streamId}\r\n";
+    }
+    else if (cmd == "XRANGE" && argsize >= 2 && streamKeyDB.ContainsKey(command[4]))
+    {
+        int idCount = argsize - 2;
+        response = $"*{idCount}\r\n";
+        for (int i = 6; i < command.Length; i += 2)
+        {
+            string streamid = command[i];
+            if (!streamid.Contains("-"))
+            {
+                streamid = streamid + "-0";
+            }
+            if (!streamIdDB.ContainsKey(streamid))
+                continue;
+            response += $"*2\r\n${streamid.Length}\r\n{streamid}\r\n*{streamIdDB[streamid].Count}\r\n";
+            foreach (var keyValue in streamIdDB[streamid])
+            {
+                response += $"${keyValue.Length}\r\n{keyValue}\r\n";
+            }
+        }
     }
     else
     {
@@ -526,24 +563,24 @@ bool checkStreamId(string[] timeSeq)//checking if the stream Id is valid or not
         return false;
     else if (long.Parse(timeSeq[0]) == long.Parse(lastTimeSeq[0]) && long.Parse(timeSeq[1]) <= long.Parse(lastTimeSeq[1]))//if the sequence number is less than the last sequence number and milliseconds are equal
         return false;
-    string streamId = timeSeq[0] + "-" + timeSeq[1];
-    lastStreamId = streamId;//updating the last stream id
+    lastStreamId = timeSeq[0] + "-" + timeSeq[1];//updating the last stream id
     return true;
 }
 
 void generateSequenceForStreamId(ref string[] timeSeq)//generating the sequence number for stream id
 {
-    if (db[timeSeq[0]] != null)
+    if (timeStampDB.ContainsKey(timeSeq[0]))
     {
-        long seq = long.Parse(db[timeSeq[0]].ToString()) + 1;
-        db.Set(timeSeq[0], (object)seq, DateTimeOffset.MaxValue);
+        int seq = int.Parse(timeStampDB[timeSeq[0]]);
+        seq++;
+        timeStampDB[timeSeq[0]] = seq.ToString();
     }
     else
-        db.Set(timeSeq[0], (object)0, DateTimeOffset.MaxValue);
-    timeSeq[1] = db[timeSeq[0]].ToString();
-    if (timeSeq[0] == "0" && timeSeq[1] == "0")//if streamId is set to be 0-0 we had t change it as it can't be 0-0
     {
-        timeSeq[0] = "0";
-        timeSeq[1] = "1";
+        if (timeSeq[0] != "0")
+            timeStampDB[timeSeq[0]] = "0";
+        else
+            timeStampDB[timeSeq[0]] = "1";
     }
+    timeSeq[1] = timeStampDB[timeSeq[0]];
 }
