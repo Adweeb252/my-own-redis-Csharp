@@ -79,3 +79,9 @@
 - **E.g. `XREAD block <block_time> streams <stream_key1> <stream_key2> <stream1_Id> <stream2_Id>` after this running this you can give another `XADD <stream_key1>` like command by connecting to another redis-client on same port.**
 - **If you want first instance of the redis-cli doesn't time out and responds with null no matter how much time passes. It will wait until another entry is added so we can use `XREAD block 0 streams <stream_key> <stream_Id>`.**
 - **If you want to display only the new entry added after giving the command or display (nil) if the block time expires, you can use `XREAD block <block_time> streams <stream_key> $`.**
+
+19. Implemented INCR command which increments the value of a key by 1.
+
+- **It only increments the value if it is in integer otherwise throws a error.**
+- **It creates a new key if key doesn't exits and set it as 1.**
+- **E.g. `INCR age` if age exists it will increment it by 1.**

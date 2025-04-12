@@ -430,6 +430,28 @@ async Task handleCommands(string message, Socket client)
             }
         }
     }
+    else if (cmd == "INCR" && argsize == 2)
+    {
+        string key = command[4];
+        if (db[key] != null)
+        {
+            if (int.TryParse(db[key].ToString(), out int value))
+            {
+                value++;
+                db.Set(key, (object)value, DateTimeOffset.MaxValue);
+                response = $":{value}\r\n";
+            }
+            else
+            {
+                response = "-ERR value is not an integer or out of range\r\n";
+            }
+        }
+        else
+        {
+            db.Set(key, (object)1, DateTimeOffset.MaxValue);
+            response = $":1\r\n";
+        }
+    }
     else
     {
         response = "-ERR unknown command\r\n";
