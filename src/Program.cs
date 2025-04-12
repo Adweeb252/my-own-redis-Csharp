@@ -34,7 +34,7 @@ string masterRid = randomStringGenerator(40);
 string masterOffset = "0";
 
 string lastStreamId = "0-0"; // last stream id for XADD command
-Dictionary<string, string[]> streamKeyDB = new Dictionary<string, string[]>();//for storing the stream key and the stream ids
+Dictionary<string, List<string>> streamKeyDB = new Dictionary<string, List<string>>();//for storing the stream key and the stream ids
 Dictionary<string, List<string>> streamIdDB = new Dictionary<string, List<string>>();//for storing the stream ids and the key-value pairs
 Dictionary<string, string> timeStampDB = new Dictionary<string, string>();//for storing the stream ids and the time stamps
 
@@ -285,7 +285,7 @@ async Task handleCommands(string message, Socket client)
             response = "$-1\r\n";
         }
 
-        if (streamKeyDB[key] != null)
+        if (streamKeyDB.ContainsKey(key))
             response = $"+stream\r\n";//key is a stream type
     }
     else if (cmd == "XADD")//to add stream data types
@@ -313,18 +313,16 @@ async Task handleCommands(string message, Socket client)
         }
         if (!streamKeyDB.ContainsKey(streamKey))
         {
-            streamKeyDB[streamKey] = new string[] { streamId };
+            streamKeyDB[streamKey] = new List<string> { streamId };
         }
         else
         {
-            var existingIds = streamKeyDB[streamKey].ToList();
-            existingIds.Add(streamId);
-            streamKeyDB[streamKey] = existingIds.ToArray();
+            streamKeyDB[streamKey].Add(streamId);
         }
         streamIdDB[streamId] = keyValueList; // setting the stream id as key for key-value pairs so that during Type command , it can be identified as stream
         response = $"+{streamId}\r\n";
     }
-    else if (cmd == "XRANGE" && argsize >= 2 && streamKeyDB.ContainsKey(command[4]))
+    else if (cmd == "XRANGE" && argsize >= 2 && streamKeyDB.ContainsKey(command[4]))// used to display ranges for specified stream ids
     {
         string start = command[6].Contains("-") ? command[6] : command[6] + "-0";
         string end = command[8].Contains("-") ? command[8] : command[8] + "-0";
@@ -336,8 +334,8 @@ async Task handleCommands(string message, Socket client)
         {
             end = streamKeyDB[command[4]].Last();
         }
-        int startIndex = Array.IndexOf(streamKeyDB[command[4]], start);
-        int endIndex = Array.IndexOf(streamKeyDB[command[4]], end);
+        int startIndex = streamKeyDB[command[4]].FindIndex(x => x == start);
+        int endIndex = streamKeyDB[command[4]].FindIndex(x => x == end);
         int idCount = endIndex - startIndex + 1;
         response = $"*{idCount}\r\n";
         for (int i = startIndex; i <= endIndex; i++)
@@ -347,6 +345,88 @@ async Task handleCommands(string message, Socket client)
             foreach (var keyValue in streamIdDB[streamid])
             {
                 response += $"${keyValue.Length}\r\n{keyValue}\r\n";
+            }
+        }
+    }
+    else if (cmd == "XREAD" && argsize >= 4)//read single or multiple streams for specific stream ids and can also use block arguement to wait for new entries in the stream
+    {
+        int blockIndex = 0;
+        int blockTime = -1;
+        if (command[4] == "block")
+        {
+            blockTime = int.Parse(command[6]);
+            blockIndex = 4;
+            if (blockTime > 0 && !command.Contains("$"))
+            {
+                await Task.Delay(blockTime);
+            }
+        }
+        int streamCount = 0;
+        int idsStartIndex = -1;
+        for (int i = 6 + blockIndex; i < command.Length; i += 2)
+        {
+            if (streamKeyDB.ContainsKey(command[i]))
+            {
+                streamCount++;
+            }
+            else
+            {
+                idsStartIndex = i;
+                break;
+            }
+        }
+        response = $"*{streamCount}\r\n";
+        int gap = idsStartIndex - (6 + blockIndex);
+        for (int i = 6 + blockIndex; i < idsStartIndex; i += 2)
+        {
+            string streamKey = command[i];
+            response += $"*2\r\n${streamKey.Length}\r\n{streamKey}\r\n";
+            string streamId = command[i + gap];
+            string start = streamId.Contains("-") ? streamId : streamId + "-0";
+            string end = streamKeyDB[streamKey].Last();
+            int startIndex = streamKeyDB[streamKey].FindIndex(x => x == start), endIndex = streamKeyDB[streamKey].FindIndex(x => x == end);//defining start and end index of streamIds which need to be displayed with start as explicit
+            if (blockIndex > 0 && blockTime == 0)
+            {
+                while (startIndex == endIndex)
+                {
+                    await Task.Delay(1000);
+                    end = streamKeyDB[streamKey].Last();
+                    endIndex = streamKeyDB[streamKey].FindIndex(x => x == end);
+                }
+            }
+            else if (blockIndex > 0 && streamId == "$")
+            {
+                int oldEndIndex = endIndex;
+                int timePassed = 0;
+                while (oldEndIndex == endIndex && timePassed < blockTime)
+                {
+                    await Task.Delay(100);
+                    timePassed += 100;
+                    end = streamKeyDB[streamKey].Last();
+                    endIndex = streamKeyDB[streamKey].FindIndex(x => x == end);
+                }
+                if (oldEndIndex == endIndex)
+                {
+                    response = "$-1\r\n";
+                    client.Send(Encoding.UTF8.GetBytes(response));
+                    Console.WriteLine($"Sent: {response}");
+                    return;
+                }
+                else
+                {
+                    startIndex = endIndex - 1;
+                }
+            }
+            int idCount = endIndex - startIndex;
+            response += $"*{idCount}\r\n";
+            for (int j = startIndex + 1; j <= endIndex; j++)
+            {
+                string newStreamid = streamKeyDB[streamKey][j];
+                response += $"*2\r\n${newStreamid.Length}\r\n{newStreamid}\r\n*{streamIdDB[newStreamid].Count}\r\n";
+                foreach (var keyValue in streamIdDB[newStreamid])
+                {
+                    response += $"${keyValue.Length}\r\n{keyValue}\r\n";
+                }
             }
         }
     }

@@ -61,7 +61,7 @@
 
 16. Implemented XADD command which Creats stream type data and also validating there stream Ids
 
-- **when you want to add stream type data you can run `XADD stream_key stream_id <key1> <value1> <key2> <value2>` to create a stream type data which can have entries and also only the validating/correct stream Ids can be used whiich means.**
+- **when you want to add stream type data you can run `XADD stream_key stream_id <key1> <value1> <key2> <value2>` to create a stream type data which can have entries and also only the validating/correct stream Ids can be used which means every new streamId should be incremental.**
 - **E.g. Stream Ids are of this type 0-1 in which first 0 is in milliseconds and 1 is entry number so every stream Id should be unique even if they are added at same milli second, it should have different entry number.**
 - **You can also generate partial stream Ids like `XADD stream_key 12345-* <key1> <value1>` this will generate the sequence number automatically that doesn't exist already in the database for this time stamp part of streamId.**
 - **You can also generate Full stream Ids like `XADD stream_key * <key1> <value1>` this will generate the time part as well as sequence number automatically which doesn't exist already in the database.**
@@ -71,3 +71,11 @@
 - **when you want to retrieve entries from start specific id to end specific id from a stream key you can use this command `XRANGE stream_key <streamId1> <streamId2>`.**
 - **you can also use - in place of streamId1 to get all the ids of that stream till the end stream id like this: `XRANGE stream_key - <streamId2>`.**
 - **you can also use + in place of streamId2 to get all the ids of the stream after streamId1 to till last streamId like this: `XRANGE stream_key <streamId1> +`.**
+
+18. Implemented XREAD command which read data from one or more streams, starting from a specified entry ID.
+
+- **when you want to retrieve entries from multiple stream and for specified streamId explicitly, you can use this like: `XREAD streams <stream_key1> <stream_key2> <stream1_Id> <stream2_Id>`.**
+- **when you use block arguement with this XREAD command you can make it wait for specific time in which another client on same network can give new data and the the new data will also be displayed, it can be said that it works asynchronously by using block.**
+- **E.g. `XREAD block <block_time> streams <stream_key1> <stream_key2> <stream1_Id> <stream2_Id>` after this running this you can give another `XADD <stream_key1>` like command by connecting to another redis-client on same port.**
+- **If you want first instance of the redis-cli doesn't time out and responds with null no matter how much time passes. It will wait until another entry is added so we can use `XREAD block 0 streams <stream_key> <stream_Id>`.**
+- **If you want to display only the new entry added after giving the command or display (nil) if the block time expires, you can use `XREAD block <block_time> streams <stream_key> $`.**
