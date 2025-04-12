@@ -38,6 +38,11 @@ Dictionary<string, List<string>> streamKeyDB = new Dictionary<string, List<strin
 Dictionary<string, List<string>> streamIdDB = new Dictionary<string, List<string>>();//for storing the stream ids and the key-value pairs
 Dictionary<string, string> timeStampDB = new Dictionary<string, string>();//for storing the stream ids and the time stamps
 
+Dictionary<Socket, bool> clientTransactionState = new Dictionary<Socket, bool>(); //for storing the transaction state of the client
+Dictionary<Socket, Queue<string>> clientCommands = new Dictionary<Socket, Queue<string>>();//for storing commands in transaction state of clients
+string response = string.Empty;//making response global so that it can be used in all the functions
+bool execActive = false;//flag for knowing if exec command is called or not yet
+
 args = Environment.GetCommandLineArgs();
 await handleArguements(args);
 loadRDBfile();
@@ -96,7 +101,32 @@ async Task handleCommands(string message, Socket client)
 
     int argsize = int.Parse(cmdsize); //arguement size which is the first line
     string cmd = command[2].ToUpper();
-    string response = "none";
+    response = "none";
+    if (clientTransactionState.ContainsKey(client) && clientTransactionState[client])//if transaction state is active queue all the commands
+    {
+        if (cmd == "EXEC")
+        {
+            handleExecCommand(client);
+            return;
+        }
+        if (cmd == "DISCARD")
+        {
+            clientTransactionState[client] = false;//transaction state is off now
+            if (clientCommands.ContainsKey(client))
+                clientCommands[client].Clear();//clearing the command queue if it exists
+            response = "+OK\r\n";
+            handleSendingToClient(client);
+            return;
+        }
+        if (!clientCommands.ContainsKey(client))
+            clientCommands[client] = new Queue<string>();
+
+        clientCommands[client].Enqueue(message);//queueing every commands that are recieved from client
+        response = "+QUEUED\r\n";
+        handleSendingToClient(client);
+        return;
+    }
+
     if (cmd == "SET" && argsize >= 3)//Set's the key to the value
     {
         string key = command[4];
@@ -300,8 +330,7 @@ async Task handleCommands(string message, Socket client)
         if (!checkStreamId(timeSeq))
         {
             response = "-ERR invalid stream id\r\n";
-            client.Send(Encoding.UTF8.GetBytes(response));
-            Console.WriteLine($"Sent: {response}");
+            handleSendingToClient(client);
             return;
         }
         streamId = timeSeq[0] + "-" + timeSeq[1];
@@ -408,8 +437,7 @@ async Task handleCommands(string message, Socket client)
                 if (oldEndIndex == endIndex)
                 {
                     response = "$-1\r\n";
-                    client.Send(Encoding.UTF8.GetBytes(response));
-                    Console.WriteLine($"Sent: {response}");
+                    handleSendingToClient(client);
                     return;
                 }
                 else
@@ -430,7 +458,7 @@ async Task handleCommands(string message, Socket client)
             }
         }
     }
-    else if (cmd == "INCR" && argsize == 2)
+    else if (cmd == "INCR" && argsize == 2)//Implementing INCR command to increment the key by 1
     {
         string key = command[4];
         if (db[key] != null)
@@ -452,12 +480,16 @@ async Task handleCommands(string message, Socket client)
             response = $":1\r\n";
         }
     }
+    else if (cmd == "MULTI")
+    {
+        response = "+OK\r\n";
+        clientTransactionState[client] = true;
+    }
     else
     {
         response = "-ERR unknown command\r\n";
     }
-    client.Send(Encoding.UTF8.GetBytes(response));
-    Console.WriteLine($"Sent: {response}");
+    handleSendingToClient(client);
 }
 async Task handleArguements(string[] args)
 {
@@ -691,4 +723,32 @@ void generateSequenceForStreamId(ref string[] timeSeq)//generating the sequence 
             timeStampDB[timeSeq[0]] = "1";
     }
     timeSeq[1] = timeStampDB[timeSeq[0]];
+}
+
+void handleExecCommand(Socket client)//handling the exec command
+{
+    string newResponse = $"*{clientCommands[client].Count}\r\n";//total number of commands in the queue
+    clientTransactionState[client] = false;//transaction state is off now
+    execActive = true;//exec command is called
+    while (clientCommands[client].Count > 0)
+    {
+        string message = clientCommands[client].Dequeue();
+        handleCommands(message, client);//handling the commands in the queue
+        newResponse += response;
+    }
+    client.Send(Encoding.UTF8.GetBytes(newResponse));
+    Console.WriteLine($"Sent: {newResponse}");
+    clientCommands[client].Clear();
+    response = string.Empty;
+    Console.WriteLine($"Cleared the command queue");
+    execActive = false;//exec command is exited
+}
+
+void handleSendingToClient(Socket client)//sending the response to client
+{
+    if (execActive)//returning without sending response when exec command is called
+        return;
+    client.Send(Encoding.UTF8.GetBytes(response));
+    Console.WriteLine($"Sent: {response}");
+    response = string.Empty;
 }

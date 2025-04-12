@@ -85,3 +85,10 @@
 - **It only increments the value if it is in integer otherwise throws a error.**
 - **It creates a new key if key doesn't exits and set it as 1.**
 - **E.g. `INCR age` if age exists it will increment it by 1.**
+
+20. Implemented MULTI command which enables the transaction state in which every command given by client is queued and only executed when EXEC command is sent.
+
+- **First you need to send `MULTI` command now you are in transaction state, so every command given will be queued and not executed, we can also check if it is executed or not by connecting anotherc client and access the key or something whose related command you queued.**
+- **It also gives error for those commands which were incorrect in any way after you give `EXEC` command.**
+- **You can also use `DISCARD` to abort a transaction which will discard all the commands queued during this transaction.**
+- **It also supports multiple transactions at same time from different clients and also ensures there isn't race conditions occuring between clients commands.**
