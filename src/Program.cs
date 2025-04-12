@@ -3,7 +3,6 @@ using System.Net.Sockets;
 using System.Text;
 using System.Runtime.Caching;
 using System.Threading.Tasks;
-using RedisMaster;
 using System.Data.SqlTypes;
 using System.Diagnostics.Eventing.Reader;
 using System.Diagnostics;
