@@ -92,3 +92,7 @@
 - **It also gives error for those commands which were incorrect in any way after you give `EXEC` command.**
 - **You can also use `DISCARD` to abort a transaction which will discard all the commands queued during this transaction.**
 - **It also supports multiple transactions at same time from different clients and also ensures there isn't race conditions occuring between clients commands.**
+
+## Acknowledgements
+
+- **Inspired and guided by the [Codecrafters "Build Your Own Redis" challenge](https://codecrafters.io/challenges/redis). Thanks for the clear stage instructions that helped me structure and deepen my understanding of Redis internals.**
