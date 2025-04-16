@@ -91,7 +91,7 @@
 - **First you need to send `MULTI` command now you are in transaction state, so every command given will be queued and not executed, we can also check if it is executed or not by connecting anotherc client and access the key or something whose related command you queued.**
 - **It also gives error for those commands which were incorrect in any way after you give `EXEC` command.**
 - **You can also use `DISCARD` to abort a transaction which will discard all the commands queued during this transaction.**
-- **It also supports multiple transactions at same time from different clients and also ensures there isn't race conditions occuring between clients commands.**
+- **It also supports multiple transactions at same time from different clients and also ensures there isn't race conditions occurring between clients commands.**
 
 ## 🛠️ Installation
 
