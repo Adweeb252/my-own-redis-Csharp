@@ -93,6 +93,46 @@
 - **You can also use `DISCARD` to abort a transaction which will discard all the commands queued during this transaction.**
 - **It also supports multiple transactions at same time from different clients and also ensures there isn't race conditions occuring between clients commands.**
 
+## 🛠️ Installation
+
+### Prerequisites
+
+- [.NET SDK](https://dotnet.microsoft.com/en-us/download)
+
+### Steps
+
+1.  Clone the repository:
+
+    ```bash
+    git clone https://github.com/Adweeb252/my-own-reddis-Csharp.git
+    ```
+
+2.  Navigate to the project directory:
+
+    ```bash
+    cd my-own-reddis-Csharp
+    ```
+
+3.  Build the project:
+
+    ```bash
+    dotnet build
+    ```
+
+4.  Run the server:
+
+    ```bash
+    dotnet run -- --dir /opt/homebrew/redis --dbfilename dump.rdb
+    ```
+
+    - Use `--dir` and `--dbfilename` to specify the path to the RDB file.
+    - Example: `dotnet run -- --dir /opt/homebrew/redis --dbfilename dump.rdb`
+
+## ⚙️ Command-Line Options
+
+- `--port`: Specifies the port number for the server. Default is 6380. Example: `dotnet run -- --port 6381`
+- `--replicaof`: Configures the server as a slave. Example: `dotnet run -- --port <slave_port> --replicaof "127.0.0.1 <master_port>"`
+
 ## Acknowledgements
 
 - **Inspired and guided by the [Codecrafters "Build Your Own Redis" challenge](https://codecrafters.io/challenges/redis). Thanks for the clear stage instructions that helped me structure and deepen my understanding of Redis internals.**
