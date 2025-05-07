@@ -1,4 +1,4 @@
-# my-own-reddis-Csharp
+# my-own-redis-Csharp
 
 **Note:** Multiple clients can connect to this server simultaneously and send multiple commands.
 
