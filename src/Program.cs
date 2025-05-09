@@ -12,7 +12,6 @@ Console.WriteLine("Logs from your program will appear here!");
 
 bool isServerRunning = true;
 //Mapping for set and get commands
-// Dictionary<string, string> dict = new Dictionary<string, string>();
 var db = MemoryCache.Default;
 DateTime EPOCH = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
 string dir = string.Empty;
@@ -43,7 +42,7 @@ string response = string.Empty;//making response global so that it can be used i
 bool execActive = false;//flag for knowing if exec command is called or not yet
 
 args = Environment.GetCommandLineArgs();
-await handleArguements(args);
+handleArguements(args);
 loadRDBfile();
 
 // Create a TCP/IP server.
@@ -490,7 +489,7 @@ async Task handleCommands(string message, Socket client)
     }
     handleSendingToClient(client);
 }
-async Task handleArguements(string[] args)
+void handleArguements(string[] args)
 {
     for (int i = 0; i < args.Length; i++)
     {
@@ -509,16 +508,11 @@ async Task handleArguements(string[] args)
         else if (args[i].Equals("--replicaof") && i + 1 < args.Length)
         {
             role = "slave";
-            await handleMaster(args[i + 1]);
+            handleMaster(args[i + 1]);
         }
-        // else if (args[i].Equals("--master") && i + 1 < args.Length)
-        // {
-        //     MasterProgram masterProgram = new MasterProgram();
-        //     await masterProgram.Run(args.Skip(i + 1).ToArray());
-        // }
     }
 }
-async Task handleMaster(string str)
+void handleMaster(string str)
 {
     string[] master = str.Split(" ");
     if (master.Length == 2)
@@ -681,7 +675,7 @@ int ParseExpiryKey(byte[] data, ref int index)
     return expTime;
 }
 
-string randomStringGenerator(int length)
+string randomStringGenerator(int length)//for generating random string
 {
     var chars = "0123456789abcdefghijklmnopqrstuvwxyz";
     var output = new StringBuilder();
@@ -708,7 +702,7 @@ bool checkStreamId(string[] timeSeq)//checking if the stream Id is valid or not
 
 void generateSequenceForStreamId(ref string[] timeSeq)//generating the sequence number for stream id
 {
-    if (timeStampDB.ContainsKey(timeSeq[0]))
+    if (timeStampDB.ContainsKey(timeSeq[0]))//if time stamp is already present in the database
     {
         int seq = int.Parse(timeStampDB[timeSeq[0]]);
         seq++;
